@@ -23,19 +23,6 @@
 	};
 };
 
-&lptim1 {
-	clocks = <&rcc STM32_CLOCK(APB7, 11)>,
-	         <&rcc STM32_SRC_LSI LPTIM1_SEL(1)>;
-	status = "okay";
-};
-
-&rtc {
-	status = "okay";
-	clocks = <&rcc STM32_CLOCK(APB7, 21)>,
-		 <&rcc STM32_SRC_LSI RTC_SEL(2)>;
-	prescaler = <32000>;  // Typical for LSI, if 32 kHz
-};
-
-&clk_lse {
+&clk_lsi {
 	status = "disabled";
 };
