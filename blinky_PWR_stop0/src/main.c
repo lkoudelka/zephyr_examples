@@ -6,50 +6,97 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
-#include <zephyr/devicetree.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/sys/printk.h>
-#include <zephyr/pm/device_runtime.h>
 
-/* define SLEEP_TIME_MS higher than <st,counter-value> in ms */
-#if DT_PROP(DT_NODELABEL(stm32_lp_tick_source), st_counter_value)
-#define SLEEP_TIME_MS   (DT_PROP(DT_NODELABEL(stm32_lp_tick_source), st_counter_value) * 1400)
-#else
+#include <zephyr/init.h>
+#include <zephyr/pm/policy.h>
+
+
 #define SLEEP_TIME_MS   2000
+
+
+#if defined(CONFIG_GPIO)
+/* The devicetree node identifier for the "led0" alias. */
+#define LED0_NODE DT_ALIAS(led0)
+
+#if DT_NODE_HAS_STATUS_OKAY(LED0_NODE)
+#include <zephyr/drivers/gpio.h>
+#include <stm32wbaxx_ll_gpio.h>
+#include <stm32wbaxx_ll_bus.h>
+#define HAS_LED     1
+
+static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+
+// Define portable LL-compatible port/pin from devicetree
+#define LED_GPIO_PORT ((GPIO_TypeDef *)DT_REG_ADDR(DT_GPIO_CTLR(DT_ALIAS(led0), gpios)))
+#define LED_GPIO_PIN  (1U << DT_GPIO_PIN(DT_ALIAS(led0), gpios))  // Bitmask version
+
+#endif /* LED0_NODE */
+#endif /* CONFIG_GPIO */
+
+
+static int blink_setup(void)
+{
+#if defined(HAS_LED)
+	int err;
+	printk("Checking LED device...");
+	if (!gpio_is_ready_dt(&led)) {
+		printk("failed.\n");
+		return -EIO;
+	}
+	printk("done.\n");
+
+	printk("Configuring GPIO pin...");
+	err = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+	if (err) {
+		printk("failed.\n");
+		return -EIO;
+	}
+	printk("done.\n");
+
 #endif
+	return 0;
+}
 
-#define STM32_GPIO_PM_ENABLE(node_id) \
-	pm_device_runtime_enable(DEVICE_DT_GET(node_id));
+static void led_on(void)
+{
+#if defined(HAS_LED)
+	printk("LED on\n");
+	gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+#endif
+}
 
-static const struct gpio_dt_spec led =
-	GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+static void led_off(void)
+{
+#if defined(HAS_LED)
+	printk("LED off\n");
+
+	LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOD);
+    LL_GPIO_SetPinMode(LED_GPIO_PORT, LED_GPIO_PIN, LL_GPIO_MODE_ANALOG);
+	LL_AHB2_GRP1_DisableClock(LL_AHB2_GRP1_PERIPH_GPIOD); 
+	
+#endif
+}
 
 int main(void)
 {
-	bool led_is_on = true;
-
-	__ASSERT_NO_MSG(gpio_is_ready_dt(&led));
-
-	/* Enable device runtime PM on each GPIO port.
-	 * GPIO configuration is lost but it may result in lower power consumption.
-	 */
-	DT_FOREACH_STATUS_OKAY(st_stm32_gpio, STM32_GPIO_PM_ENABLE)
+	int err;
 
 	printk("Device ready\n");
 
+#if defined(HAS_LED)
+	err = blink_setup();
+	if (err) {
+		return 0;
+	}
+
+#endif /* HAS_LED */
+
 	while (true) {
-		gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
-		gpio_pin_set(led.port, led.pin, (int)led_is_on);
-		if (led_is_on == false) {
-			/* Release resource to release device clock */
-			gpio_pin_configure(led.port, led.pin, GPIO_DISCONNECTED);
-		}
+		led_on();
 		k_msleep(SLEEP_TIME_MS);
-		if (led_is_on == true) {
-			/* Release resource to release device clock */
-			gpio_pin_configure(led.port, led.pin, GPIO_DISCONNECTED);
-		}
-		led_is_on = !led_is_on;
+		led_off();
+		k_msleep(SLEEP_TIME_MS);
+		
 	}
 	return 0;
 }
