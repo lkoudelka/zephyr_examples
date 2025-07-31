@@ -1,0 +1,42 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2023 STMicroelectronics
+ */
+
+/ {
+	cpus {
+		cpu0: cpu@0 {
+			cpu-power-states = <&stop2>;
+		};
+	};
+};
+
+&clk_lsi {
+	status = "disabled";
+};
+
+
+/* disable unused GPIOs */
+&gpioa {
+    status = "disabled";
+};
+&gpiob {
+    status = "disabled";
+};
+&gpioc {
+    status = "disabled";
+};
+/* GPIOd used for LED */
+// &gpiod {
+//     status = "disabled";
+// };
+&gpioe {
+    status = "disabled";
+};
+&gpiog {
+    status = "disabled";
+};
+&gpioh {
+    status = "disabled";
+};
